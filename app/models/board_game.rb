@@ -547,7 +547,7 @@ class BoardGame < ApplicationRecord
     player_hand_cards(player).empty?
   end
 
-  def next_no_finished_player()
+  def next_no_finished_player(c)
     return nil if c.nil?
 
     n = c
