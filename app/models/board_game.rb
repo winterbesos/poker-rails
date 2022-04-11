@@ -191,29 +191,31 @@ class BoardGame < ApplicationRecord
   end
 
   def play(player_name, cards)
-    return false if cards.empty?
-    return false unless playable(player_name, cards)
+    self.with_lock do
+      return false if cards.empty?
+      return false unless playable(player_name, cards)
 
-    player = self.current_player
-    hand_cards = JSON.parse self[player + '_hand']
-    remaining_cards = hand_cards - cards
-    self[player + '_hand'] = remaining_cards
-    self.last_cards = cards
-    self.last_player = self.current_player
+      player = self.current_player
+      hand_cards = JSON.parse self[player + '_hand']
+      remaining_cards = hand_cards - cards
+      self[player + '_hand'] = remaining_cards
+      self.last_cards = cards
+      self.last_player = self.current_player
 
-    self.current_player = self.next(self.current_player)
-    if remaining_cards.empty?
-      self.shose_owner = self.next_couple(player)
-    else
-      self.shose_owner = nil
+      self.current_player = self.next_no_finished_player(self.current_player)
+      if remaining_cards.empty?
+        self.shose_owner = self.next_shown_couple(player)
+      else
+        self.shose_owner = nil
+      end
+
+      finished = check_finish_status
+      self.status = finished ? 99 : 2
+      self.current_player = nil if finished
+      self.save
+
+      self.board_game_records.create!(:player => player, :content => cards, :status => remaining_cards.empty? ? 99 : 2)
     end
-
-    finished = check_finish_status
-    self.status = finished ? 99 : 2
-    self.current_player = nil if finished
-    self.save
-
-    self.board_game_records.create!(:player => player, :content => cards, :status => remaining_cards.empty? ? 99 : 2)
   end
 
   def finish_order
@@ -227,30 +229,32 @@ class BoardGame < ApplicationRecord
   end
 
   def pass(player_name)
-    return false unless passable(player_name)
+    self.with_lock do
+      return false unless passable(player_name)
 
-    player = self.current_player
-    self.current_player = self.next(self.current_player)
+      player = self.current_player
+      self.current_player = self.next_no_finished_player(self.current_player)
 
-    if self.status == 1
-      self.show = self.show | (player_to_mask(player) << 4)
-      self.status = 2 if show_loop_finished
-    elsif self.status == 2
-      pool = board_game_records.order(:created_at).reverse_order.limit(remaining_players_count - 1)
-      use_shose = true
-      for r in pool
-        use_shose = false unless r.content.nil?
+      if self.status == 1
+        self.show = self.show | (player_to_mask(player) << 4)
+        self.status = 2 if show_loop_finished
+      elsif self.status == 2
+        pool = board_game_records.order(:created_at).reverse_order.limit(remaining_players_count - 1)
+        use_shose = true
+        for r in pool
+          use_shose = false unless r.content.nil?
+        end
+
+        if use_shose && !self.shose_owner.nil?
+          self.last_player = self.shose_owner
+          self.current_player = self.shose_owner
+          self.last_cards = nil
+        end
+        self.board_game_records.create!(:player => player, :content => nil)
       end
 
-      if use_shose
-        self.last_player = self.shose_owner
-        self.current_player = self.shose_owner
-        self.last_cards = nil
-      end
-      self.board_game_records.create!(:player => player, :content => nil)
+      self.save
     end
-
-    self.save
   end
 
   def show_loop_finished
@@ -258,26 +262,28 @@ class BoardGame < ApplicationRecord
   end
 
   def show_team(player_name, cards)
-    return false unless show_teamable(player_name, cards)
-    
-    player = self.current_player
-    return false if (is_triple_bomb(cards) || is_quadruple_bomb(cards)) && !(player_hand_cards(player) & RED_TEN).empty?
-    self.show = self.show | (player_to_mask(player) << 4)
-    self.show = self.show | player_to_mask(player)
+    self.with_lock do
+      return false unless show_teamable(player_name, cards)
+      
+      player = self.current_player
+      return false if (is_triple_bomb(cards) || is_quadruple_bomb(cards)) && !(player_hand_cards(player) & RED_TEN).empty?
+      self.show = self.show | (player_to_mask(player) << 4)
+      self.show = self.show | player_to_mask(player)
 
-    self.show_a = JSON.parse(self.a_hand) & RED_TEN
-    self.show_b = JSON.parse(self.b_hand) & RED_TEN
-    self.show_c = JSON.parse(self.c_hand) & RED_TEN
-    self.show_d = JSON.parse(self.d_hand) & RED_TEN
-    self['show_' + player] = cards
+      self.show_a = JSON.parse(self.a_hand) & RED_TEN
+      self.show_b = JSON.parse(self.b_hand) & RED_TEN
+      self.show_c = JSON.parse(self.c_hand) & RED_TEN
+      self.show_d = JSON.parse(self.d_hand) & RED_TEN
+      self['show_' + player] = cards
 
-    self.current_player = 'a' if player_hand_cards('a').include? PRIORITY_CARD
-    self.current_player = 'b' if player_hand_cards('b').include? PRIORITY_CARD
-    self.current_player = 'c' if player_hand_cards('c').include? PRIORITY_CARD
-    self.current_player = 'd' if player_hand_cards('d').include? PRIORITY_CARD
+      self.current_player = 'a' if player_hand_cards('a').include? PRIORITY_CARD
+      self.current_player = 'b' if player_hand_cards('b').include? PRIORITY_CARD
+      self.current_player = 'c' if player_hand_cards('c').include? PRIORITY_CARD
+      self.current_player = 'd' if player_hand_cards('d').include? PRIORITY_CARD
 
-    self.status = 2
-    self.save
+      self.status = 2
+      self.save
+    end
   end
 
   private
@@ -520,7 +526,7 @@ class BoardGame < ApplicationRecord
     return cards.include?("0h") && cards.include?("0d")
   end
 
-  def next(c)
+  def next_player(c)
     return nil if c.nil?
 
     n = c
@@ -534,7 +540,28 @@ class BoardGame < ApplicationRecord
       n = 'a'
     end
 
-    while JSON.parse(self[n + '_hand']).empty? && n != c
+    return n
+  end
+
+  def player_finished(player)
+    player_hand_cards(player).empty?
+  end
+
+  def next_no_finished_player()
+    return nil if c.nil?
+
+    n = c
+    if n == 'a'
+      n = 'b'
+    elsif n == 'b'
+      n = 'c'
+    elsif n == 'c'
+      n = 'd'
+    elsif n == 'd'
+      n = 'a'
+    end
+
+    while player_finished(n) && n != c
       if n == 'a'
         n = 'b'
       elsif n == 'b'
@@ -549,16 +576,15 @@ class BoardGame < ApplicationRecord
     return n
   end
 
-  def next_couple(c)
-    return self.next(c) if (self.show & 0b1111) == 0 # not shown
+  def next_shown_couple(c)
+    return next_player(c) if (self.show & 0b1111) == 0 # not shown
 
     ta = JSON.parse(self.team_a)
     in_ta = ta.include?(c)
 
-    n = self.next(c)
-
+    n = next_player(c)
     while in_ta != ta.include?(n) && n != c
-      n = self.next(n)
+      n = self.next_player(n)
     end
 
     return nil if n == c
