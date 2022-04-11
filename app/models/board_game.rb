@@ -1,0 +1,567 @@
+class BoardGame < ApplicationRecord
+  has_many :board_game_records
+  # status 0 未开始
+  #        1 明身份
+  #        2 进行中
+  #        99 已结束
+
+  RED_TEN = ["0h", "0d"]
+
+  BASE_INDEX_ORDER = [
+    "6", "7", "8", "9", "0", "J", "Q", "K", "A", "2"
+  ]
+  
+  SUNZA_ENABLE_INDEX_ORDER = [
+    "6", "7", "8", "9", "0", "J", "Q", "K", "A"
+  ]
+
+  BASE_POOL = [
+    "6s", "7s", "8s", "9s", "0s", "Js", "Qs", "Ks", "As", "2s",
+    "6h", "7h", "8h", "9h", "0h", "Jh", "Qh", "Kh", "Ah", "2h",
+    "6d", "7d", "8d", "9d", "0d", "Jd", "Qd", "Kd", "Ad", "2d",
+    "6c", "7c", "8c", "9c", "0c", "Jc", "Qc", "Kc", "Ac", "2c"
+  ]
+
+  PRIORITY_CARD = "6h"
+
+  before_create do
+    shuffle
+  end
+
+  def shuffle
+    pool = BASE_POOL.clone.shuffle
+    a = pool.slice(0, 10)
+    b = pool.slice(10, 10)
+    c = pool.slice(20, 10)
+    d = pool.slice(30, 10)
+
+    team_a = []
+    team_b = []
+
+    self.status = 1
+    self.a_hand = a.sort { |a,b| BASE_INDEX_ORDER.index(a[0,1]) <=> BASE_INDEX_ORDER.index(b[0,1]) }
+    self.current_player = 'a' if a.include? PRIORITY_CARD
+    team_a.append('a') if a.include?("0h") || a.include?("0d")
+    team_b.append('a') if !a.include?("0h") && !a.include?("0d")
+
+    self.b_hand = b.sort { |a,b| BASE_INDEX_ORDER.index(a[0,1]) <=> BASE_INDEX_ORDER.index(b[0,1]) }
+    self.current_player = 'b' if b.include? PRIORITY_CARD
+    team_a.append('b') if b.include?("0h") || b.include?("0d")
+    team_b.append('b') if !b.include?("0h") && !b.include?("0d")
+
+    self.c_hand = c.sort { |a,b| BASE_INDEX_ORDER.index(a[0,1]) <=> BASE_INDEX_ORDER.index(b[0,1]) }
+    self.current_player = 'c' if c.include? PRIORITY_CARD
+    team_a.append('c') if c.include?("0h") || c.include?("0d")
+    team_b.append('c') if !c.include?("0h") && !c.include?("0d")
+    
+    self.d_hand = d.sort { |a,b| BASE_INDEX_ORDER.index(a[0,1]) <=> BASE_INDEX_ORDER.index(b[0,1]) }
+    self.current_player = 'd' if d.include? PRIORITY_CARD
+    team_a.append('d') if d.include?("0h") || d.include?("0d")
+    team_b.append('d') if !d.include?("0h") && !d.include?("0d")
+
+    self.team_a = team_a
+    self.team_b = team_b
+    self.show = 0
+  end
+
+  def is_finished
+    return self.status == 99
+  end
+
+  def remaining_players_count
+    count = 0
+    count += 1 unless JSON.parse(self.a_hand).empty?
+    count += 1 unless JSON.parse(self.b_hand).empty?
+    count += 1 unless JSON.parse(self.c_hand).empty?
+    count += 1 unless JSON.parse(self.d_hand).empty?
+    return count
+  end
+
+  def player_preview(player_name)
+    player = player_by_player_name(player_name)
+    return nil if player.nil?
+
+    pool = board_game_records.order(:created_at).reverse_order.limit(remaining_players_count - 1)
+    last_a = nil
+    last_b = nil
+    last_c = nil
+    last_d = nil
+    for c in pool
+      if c.player == 'a' && last_a.nil?
+        last_a = c
+      elsif c.player == 'b' && last_b.nil?
+        last_b = c
+      elsif c.player == 'c' && last_c.nil?
+        last_c = c
+      elsif c.player == 'd' && last_d.nil?
+        last_d = c
+      end
+    end
+    return {
+      id: self.id,
+      status: self.status,
+      player: player,
+      finish_order: finish_order,
+      players: {
+        a: {
+          name: self.a,
+          last_play: last_a.nil? ? nil : {
+            action: last_a.content.nil? ? 'PASS' : 'PLAY',
+            cards: last_a.content.nil? ? nil : JSON.parse(last_a.content)
+          },
+          playing: is_current_player(self.a),
+          passable: passable(self.a),
+          cards: player == 'a' ? JSON.parse(self[player + '_hand']) : nil,
+          showCards: self.show_a.nil? ? nil : JSON.parse(self.show_a),
+          single: player_hand_cards('a').size == 1
+        },
+        b: {
+          name: self.b,
+          last_play: last_b.nil? ? nil : {
+            action: last_b.content.nil? ? 'PASS' : 'PLAY',
+            cards: last_b.content.nil? ? nil : JSON.parse(last_b.content),
+          },
+          playing: is_current_player(self.b),
+          passable: passable(self.b),
+          cards: player == 'b' ? JSON.parse(self[player + '_hand']) : nil,
+          showCards: self.show_b.nil? ? nil : JSON.parse(self.show_b),
+          single: player_hand_cards('b').size == 1
+        },
+        c: {
+          name: self.c,
+          last_play: last_c.nil? ? nil : {
+            action: last_c.content.nil? ? 'PASS' : 'PLAY',
+            cards: last_c.content.nil? ? nil : JSON.parse(last_c.content),
+          },
+          playing: is_current_player(self.c),
+          passable: passable(self.c),
+          cards: player == 'c' ? JSON.parse(self[player + '_hand']) : nil,
+          showCards: self.show_c.nil? ? nil : JSON.parse(self.show_c),
+          single: player_hand_cards('c').size == 1
+        },
+        d: {
+          name: self.d,
+          last_play: last_d.nil? ? nil : {
+            action: last_d.content.nil? ? 'PASS' : 'PLAY',
+            cards: last_d.content.nil? ? nil : JSON.parse(last_d.content)
+          },
+          playing: is_current_player(self.d),
+          passable: passable(self.d),
+          cards: player == 'd' ? JSON.parse(self[player + '_hand']) : nil,
+          showCards: self.show_d.nil? ? nil : JSON.parse(self.show_d),
+          single: player_hand_cards('d').size == 1
+        }
+      },
+    }
+  end
+
+  def player_by_player_name(player_name)
+    player = nil
+    if player_name == self.a
+      player = 'a'
+    elsif player_name == self.b
+      player = 'b'
+    elsif player_name == self.c
+      player = 'c'
+    elsif player_name == self.d
+      player = 'd'
+    else
+      player = nil
+    end
+    return player
+  end
+
+  def is_current_player(player_name)
+    return player_name == self[self.current_player]
+  end
+
+  def check_finish_status
+    team_a_finish = true
+    for tai in JSON.parse(self.team_a)
+      team_a_finish = false unless JSON.parse(self[tai + '_hand']).empty?
+    end
+
+    team_b_finish = true
+    for tai in JSON.parse(self.team_b)
+      team_b_finish = false unless JSON.parse(self[tai + '_hand']).empty?
+    end
+
+    finished = team_a_finish || team_b_finish
+    return finished
+  end
+
+  def play(player_name, cards)
+    return false if cards.empty?
+    return false unless playable(player_name, cards)
+
+    player = self.current_player
+    hand_cards = JSON.parse self[player + '_hand']
+    remaining_cards = hand_cards - cards
+    self[player + '_hand'] = remaining_cards
+    self.last_cards = cards
+    self.last_player = self.current_player
+
+    self.current_player = self.next(self.current_player)
+    if remaining_cards.empty?
+      self.shose_owner = self.next_couple(player)
+    else
+      self.shose_owner = nil
+    end
+
+    finished = check_finish_status
+    self.status = finished ? 99 : 2
+    self.current_player = nil if finished
+    self.save
+
+    self.board_game_records.create!(:player => player, :content => cards, :status => remaining_cards.empty? ? 99 : 2)
+  end
+
+  def finish_order
+    return nil unless self.status == 99
+
+    order = []
+    for r in self.board_game_records.order(:created_at)
+      order.append(r.player) if r.status == 99
+    end
+    return order
+  end
+
+  def pass(player_name)
+    return false unless passable(player_name)
+
+    player = self.current_player
+    self.current_player = self.next(self.current_player)
+
+    if self.status == 1
+      self.show = self.show | (player_to_mask(player) << 4)
+      self.status = 2 if show_loop_finished
+    elsif self.status == 2
+      pool = board_game_records.order(:created_at).reverse_order.limit(remaining_players_count - 1)
+      use_shose = true
+      for r in pool
+        use_shose = false unless r.content.nil?
+      end
+
+      if use_shose
+        self.last_player = self.shose_owner
+        self.current_player = self.shose_owner
+        self.last_cards = nil
+      end
+      self.board_game_records.create!(:player => player, :content => nil)
+    end
+
+    self.save
+  end
+
+  def show_loop_finished
+    return (self.show & (0b1111 << 4)) == 0b1111 << 4
+  end
+
+  def show_team(player_name, cards)
+    return false unless show_teamable(player_name, cards)
+    
+    player = self.current_player
+    return false if (is_triple_bomb(cards) || is_quadruple_bomb(cards)) && !(player_hand_cards(player) & RED_TEN).empty?
+    self.show = self.show | (player_to_mask(player) << 4)
+    self.show = self.show | player_to_mask(player)
+
+    self.show_a = JSON.parse(self.a_hand) & RED_TEN
+    self.show_b = JSON.parse(self.b_hand) & RED_TEN
+    self.show_c = JSON.parse(self.c_hand) & RED_TEN
+    self.show_d = JSON.parse(self.d_hand) & RED_TEN
+    self['show_' + player] = cards
+
+    self.current_player = 'a' if player_hand_cards('a').include? PRIORITY_CARD
+    self.current_player = 'b' if player_hand_cards('b').include? PRIORITY_CARD
+    self.current_player = 'c' if player_hand_cards('c').include? PRIORITY_CARD
+    self.current_player = 'd' if player_hand_cards('d').include? PRIORITY_CARD
+
+    self.status = 2
+    self.save
+  end
+
+  private
+  def player_to_mask(player)
+    if player == 'a'
+      return 1 << 0
+    elsif player == 'b'
+      return 1 << 1
+    elsif player == 'c'
+      return 1 << 2
+    elsif player == 'd'
+      return 1 << 3
+    else
+      return 0
+    end
+  end
+
+  def show_teamable(player_name, cards)
+    return false unless self.status == 1
+    return false unless is_current_player(player_name)
+
+    hand_cards = player_hand_cards(self.current_player)
+    return false unless contains_cards(hand_cards, cards)
+    return false unless is_single_red_ten(cards) || is_double_red_ten(cards) || is_triple_bomb(cards) || is_quadruple_bomb(cards)
+    return false if contains_double_red_ten(hand_cards) && is_single_red_ten(cards)
+    return true
+  end
+
+  def player_hand_cards(player)
+    JSON.parse(self[player + '_hand'])
+  end
+
+  def player_show_cards(player)
+    JSON.parse(self['show_' + player])
+  end
+
+  def contains_double_red_ten(cards)
+    return cards.include?("0h") && cards.include?("0d")
+  end
+
+  def contains_cards(hand_cards, cards)
+    hcset = hand_cards.to_set
+    for card in cards
+      return false unless hcset.include?(card)
+    end
+    return true
+  end
+
+  def contains_any_cards(cardsA, cardsB)
+    set = cardsA.to_set
+    for card in cardsB
+      return true if set.include?(card)
+    end
+    return false
+  end
+
+  def passable(player_name)
+    return false unless is_current_player(player_name)
+    return self.last_player != nil && self.last_player != self.current_player if self.status == 2
+    return true
+  end
+
+  def valid(cards)
+    return is_single(cards) || is_couple(cards) || is_shunza(cards) || is_couple_shunza(cards) || is_triple_bomb(cards) || is_quadruple_bomb(cards)
+  end
+
+  def initiative_show_validate(player, cards)
+    mask = player_to_mask(player)
+    return true unless self.show & mask > 0 # 主动亮牌校验
+    show_cards = player_show_cards(player)
+    return true if is_single_red_ten(show_cards) # 单红十没有限制
+    return false if contains_any_cards(cards, show_cards) && (show_cards.size != cards.size || !(show_cards - cards).empty?) # 出牌包含任何一张亮牌 且 出牌和亮牌不完全一样
+    return true
+  end
+
+  def red_six_play_first_validate(cards)
+    hand_cards = player_hand_cards(self.current_player)
+    return true if hand_cards.size < 10    
+    return true unless hand_cards.include?(PRIORITY_CARD)
+    six_count = hand_cards.map { |c| c[0] }.map { |i| BASE_INDEX_ORDER.index(i) }.sort.select {|i| i == 0}.size
+    return true if six_count >= 3
+    return true if cards.include?(PRIORITY_CARD)
+    return false
+  end
+
+  def playable(player_name, cards)
+    return false unless valid(cards)
+    return false unless is_current_player(player_name)
+    return false unless red_six_play_first_validate(cards)
+    return false unless contains_cards(player_hand_cards(self.current_player), cards)
+    return false unless initiative_show_validate(self.current_player, cards)
+    return true if self.last_player == self.current_player
+    return true if self.last_cards.nil?
+
+    last_cards = JSON.parse self.last_cards
+
+    if is_double_red_ten(cards)
+      return true
+    elsif is_double_red_ten(last_cards)
+      return false
+    elsif is_single(last_cards)
+      if is_single(cards)
+        return base_cards_index(cards) > base_cards_index(last_cards)
+      elsif is_couple(cards) || is_shunza(cards) || is_couple_shunza(cards)
+        return false
+      else
+        return true
+      end
+    elsif is_couple(last_cards)
+      if is_couple(cards)
+        return base_cards_index(cards) > base_cards_index(last_cards)
+      elsif is_single(cards) || is_shunza(cards) || is_couple_shunza(cards)
+        return false
+      else
+        return true
+      end
+    elsif is_shunza(last_cards)
+      if is_shunza(cards)
+        return base_cards_index(cards) > base_cards_index(last_cards)
+      elsif is_single(cards) || is_couple(cards) || is_couple_shunza(cards)
+        return false
+      else
+        return true
+      end
+    elsif is_couple_shunza(last_cards)
+      if is_couple_shunza(cards)
+        return base_cards_index(cards) > base_cards_index(last_cards)
+      elsif is_single(cards) || is_couple(cards) || is_shunza(cards) || is_triple_bomb(cards)
+        return false
+      else
+        return true
+      end
+    elsif is_triple_bomb(last_cards)
+      if is_triple_bomb(cards)
+        return base_cards_index(cards) > base_cards_index(last_cards)
+      elsif is_single(cards) || is_couple(cards) || is_shunza(cards) || is_couple_shunza(cards)
+        return false
+      else
+        return true
+      end
+    elsif is_quadruple_bomb(last_cards)
+      if is_quadruple_bomb(cards)
+        return base_cards_index(cards) > base_cards_index(last_cards)
+      else
+        return true
+      end
+    else 
+      return false
+    end
+  end
+
+  def base_cards_index(cards)
+    if self.is_single(cards)
+      return 999 if cards.include?("0h") || cards.include?("0d")
+      return BASE_INDEX_ORDER.index(cards[0][0,1])
+    elsif self.is_couple(cards)
+      return BASE_INDEX_ORDER.index(cards[0][0,1])
+    elsif self.is_shunza(cards)
+      return card_indexes = cards.map { |c| c[0][0,1] }.map { |i| SUNZA_ENABLE_INDEX_ORDER.index(i) }.sort[0]
+    elsif self.is_couple_shunza(cards)
+      return card_indexes = cards.map { |c| c[0][0,1] }.map { |i| SUNZA_ENABLE_INDEX_ORDER.index(i) }.sort[0]
+    elsif self.is_triple_bomb(cards)
+      return BASE_INDEX_ORDER.index(cards[0][0,1])
+    elsif self.is_quadruple_bomb(cards)
+      return BASE_INDEX_ORDER.index(cards[0][0,1])
+    end
+  end
+
+  def is_single(cards)
+    return cards.size == 1
+  end
+
+  def is_couple(cards)
+    return false if cards.size != 2
+    return cards[0][0] == cards[1][0]
+  end
+
+  def is_shunza(cards)
+    return false if cards.size < 3
+    card_indexes = cards.map { |c| c[0] }.map { |i| SUNZA_ENABLE_INDEX_ORDER.index(i) }.sort
+
+    last_index = nil
+    for i in card_indexes
+      if last_index.nil?
+        last_index = i
+        next
+      end
+
+      return false if i != last_index + 1
+      last_index = i
+    end
+
+    return true
+  end
+
+  def is_couple_shunza(cards)
+    return false if cards.size < 6
+    card_indexes = cards.map { |c| c[0] }.map { |i| SUNZA_ENABLE_INDEX_ORDER.index(i) }.sort
+
+
+    helf_couple = nil
+    last_index = nil
+    for i in card_indexes
+      if helf_couple.nil?
+        if last_index.nil?
+          helf_couple = i
+          last_index = i
+          next
+        end
+
+        return false if i != last_index + 1
+        last_index = i
+        helf_couple = i
+      else
+        return false if helf_couple != i
+        helf_couple = nil
+      end
+    end
+
+    return true
+  end
+
+  def is_triple_bomb(cards)
+    return false if cards.size != 3
+    return cards.map {|c| c[0]}.uniq.size == 1
+  end
+
+  def is_quadruple_bomb(cards)
+    return false if cards.size != 4
+    return cards.map {|c| c[0]}.uniq.size == 1
+  end
+
+  def is_single_red_ten(cards)
+    return false unless cards.size == 1
+    return cards.include?("0h") || cards.include?("0d")
+  end
+
+  def is_double_red_ten(cards)
+    return false if cards.size != 2
+    return cards.include?("0h") && cards.include?("0d")
+  end
+
+  def next(c)
+    return nil if c.nil?
+
+    n = c
+    if n == 'a'
+      n = 'b'
+    elsif n == 'b'
+      n = 'c'
+    elsif n == 'c'
+      n = 'd'
+    elsif n == 'd'
+      n = 'a'
+    end
+
+    while JSON.parse(self[n + '_hand']).empty? && n != c
+      if n == 'a'
+        n = 'b'
+      elsif n == 'b'
+        n = 'c'
+      elsif n == 'c'
+        n = 'd'
+      elsif n == 'd'
+        n = 'a'
+      end
+    end
+    return nil if n == c
+    return n
+  end
+
+  def next_couple(c)
+    return self.next(c) if (self.show & 0b1111) == 0 # not shown
+
+    ta = JSON.parse(self.team_a)
+    in_ta = ta.include?(c)
+
+    n = self.next(c)
+
+    while in_ta != ta.include?(n) && n != c
+      n = self.next(n)
+    end
+
+    return nil if n == c
+    return n
+  end
+end

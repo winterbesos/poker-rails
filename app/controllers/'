@@ -1,0 +1,16 @@
+class BoardGamesController < ApplicationController
+
+  def play
+    game = BoardGamesController.find params[:id]
+
+    player = params[:player]
+    cards = params[:cards]
+
+    if player != game.current_player
+      head 403
+      return
+    end
+    
+  end
+
+end
