@@ -463,6 +463,7 @@ class BoardGame < ApplicationRecord
 
   def is_shunza(cards)
     return false if cards.size < 3
+    return false if contains_any_cards(cards, ["2s", "2h", "2d", "2c"])
     card_indexes = cards.map { |c| c[0] }.map { |i| SUNZA_ENABLE_INDEX_ORDER.index(i) }.sort
 
     last_index = nil
