@@ -113,7 +113,8 @@ class BoardGame < ApplicationRecord
           passable: passable(self.a),
           cards: player == 'a' ? JSON.parse(self[player + '_hand']) : nil,
           showCards: self.show_a.nil? ? nil : JSON.parse(self.show_a),
-          single: player_hand_cards('a').size == 1
+          single: player_hand_cards('a').size == 1,
+          ranking: finish_order.index('a'),
         },
         b: {
           name: self.b,
@@ -125,7 +126,8 @@ class BoardGame < ApplicationRecord
           passable: passable(self.b),
           cards: player == 'b' ? JSON.parse(self[player + '_hand']) : nil,
           showCards: self.show_b.nil? ? nil : JSON.parse(self.show_b),
-          single: player_hand_cards('b').size == 1
+          single: player_hand_cards('b').size == 1,
+          ranking: finish_order.index('b'),
         },
         c: {
           name: self.c,
@@ -137,7 +139,8 @@ class BoardGame < ApplicationRecord
           passable: passable(self.c),
           cards: player == 'c' ? JSON.parse(self[player + '_hand']) : nil,
           showCards: self.show_c.nil? ? nil : JSON.parse(self.show_c),
-          single: player_hand_cards('c').size == 1
+          single: player_hand_cards('c').size == 1,
+          ranking: finish_order.index('c'),
         },
         d: {
           name: self.d,
@@ -149,7 +152,8 @@ class BoardGame < ApplicationRecord
           passable: passable(self.d),
           cards: player == 'd' ? JSON.parse(self[player + '_hand']) : nil,
           showCards: self.show_d.nil? ? nil : JSON.parse(self.show_d),
-          single: player_hand_cards('d').size == 1
+          single: player_hand_cards('d').size == 1,
+          ranking: finish_order.index('d'),
         }
       },
     }
@@ -219,7 +223,7 @@ class BoardGame < ApplicationRecord
   end
 
   def finish_order
-    return nil unless self.status == 99
+    return [] unless self.status == 99
 
     order = []
     for r in self.board_game_records.order(:created_at)
