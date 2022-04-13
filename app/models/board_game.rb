@@ -122,7 +122,7 @@ class BoardGame < ApplicationRecord
           last_play: last_b.nil? ? nil : {
             action: last_b.content.nil? ? 'PASS' : 'PLAY',
             cards: last_b.content.nil? ? nil : JSON.parse(last_b.content),
-            index: last_a.id,
+            index: last_b.id,
           },
           playing: is_current_player(self.b),
           passable: passable(self.b),
@@ -136,7 +136,7 @@ class BoardGame < ApplicationRecord
           last_play: last_c.nil? ? nil : {
             action: last_c.content.nil? ? 'PASS' : 'PLAY',
             cards: last_c.content.nil? ? nil : JSON.parse(last_c.content),
-            index: last_a.id,
+            index: last_c.id,
           },
           playing: is_current_player(self.c),
           passable: passable(self.c),
@@ -150,7 +150,7 @@ class BoardGame < ApplicationRecord
           last_play: last_d.nil? ? nil : {
             action: last_d.content.nil? ? 'PASS' : 'PLAY',
             cards: last_d.content.nil? ? nil : JSON.parse(last_d.content),
-            index: last_a.id,
+            index: last_d.id,
           },
           playing: is_current_player(self.d),
           passable: passable(self.d),
