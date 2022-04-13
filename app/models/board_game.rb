@@ -81,7 +81,11 @@ class BoardGame < ApplicationRecord
     player = player_by_player_name(player_name)
     return nil if player.nil?
 
-    pool = board_game_records.order(:created_at).reverse_order.limit(remaining_players_count - 1)
+    pool = []
+    for r in board_game_records.order(:created_at).reverse_order[0,4]
+      break if pool.select {|pr| pr.player == r.player}.size > 0
+      pool.append(r)
+    end
     last_a = nil
     last_b = nil
     last_c = nil
@@ -335,6 +339,7 @@ class BoardGame < ApplicationRecord
         tb.each {|tbi| self[tbi + '_result'] = steps[0] }
       end
     end
+    self.save
   end
 
   def play(player_name, cards)
@@ -364,11 +369,7 @@ class BoardGame < ApplicationRecord
       self.board_game_records.create!(:player => player, :content => cards, :status => remaining_cards.empty? ? 99 : 2)
 
       if finished
-        begin
-          self.settle
-        rescue Exception => error
-          puts error.inspect
-        end
+        self.settle
       end
     end
   end
