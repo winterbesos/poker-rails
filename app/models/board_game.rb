@@ -1,4 +1,5 @@
 class BoardGame < ApplicationRecord
+  has_one :card_table
   has_many :board_game_records
   # status 0 未开始
   #        1 明身份
@@ -109,6 +110,7 @@ class BoardGame < ApplicationRecord
         a: {
           name: self.a,
           score: self.a_result,
+          table_score: self.card_table.a_score,
           last_play: last_a.nil? ? nil : {
             action: last_a.content.nil? ? 'PASS' : 'PLAY',
             cards: last_a.content.nil? ? nil : JSON.parse(last_a.content),
@@ -124,6 +126,7 @@ class BoardGame < ApplicationRecord
         b: {
           name: self.b,
           score: self.b_result,
+          table_score: self.card_table.b_score,
           last_play: last_b.nil? ? nil : {
             action: last_b.content.nil? ? 'PASS' : 'PLAY',
             cards: last_b.content.nil? ? nil : JSON.parse(last_b.content),
@@ -139,6 +142,7 @@ class BoardGame < ApplicationRecord
         c: {
           name: self.c,
           score: self.c_result,
+          table_score: self.card_table.c_score,
           last_play: last_c.nil? ? nil : {
             action: last_c.content.nil? ? 'PASS' : 'PLAY',
             cards: last_c.content.nil? ? nil : JSON.parse(last_c.content),
@@ -154,6 +158,7 @@ class BoardGame < ApplicationRecord
         d: {
           name: self.d,
           score: self.d_result,
+          table_score: self.card_table.d_score,
           last_play: last_d.nil? ? nil : {
             action: last_d.content.nil? ? 'PASS' : 'PLAY',
             cards: last_d.content.nil? ? nil : JSON.parse(last_d.content),
@@ -212,7 +217,7 @@ class BoardGame < ApplicationRecord
   def is_team_a_shown?
     return false unless is_shown?
     ta = JSON.parse(self.team_a)
-    showPlayer = ['a', 'b', 'c', 'd'][Math.log(self.show, 2)]
+    showPlayer = ['a', 'b', 'c', 'd'][Math.log((self.show & 0b1111), 2).to_i]
     return ta.include? showPlayer
   end
 
@@ -339,6 +344,8 @@ class BoardGame < ApplicationRecord
         tb.each {|tbi| self[tbi + '_result'] = steps[0] }
       end
     end
+
+    self.card_table.settle(self.a_result, self.b_result, self.c_result, self.d_result)
     self.save
   end
 

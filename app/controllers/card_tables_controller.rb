@@ -18,9 +18,22 @@ class CardTablesController < ApplicationController
     render json: player_view
   end
 
+  def stand
+    table = CardTable.find params[:card_table_id]
+
+    name = params[:name]
+    position = params[:position]
+
+    unless name
+      head 400
+      return
+    end
+
+    table.stand(name)
+  end
 
   def sit
-    table = CardTable.find params[:id]
+    table = CardTable.find params[:card_table_id]
 
     name = params[:name]
     position = params[:position]
@@ -30,18 +43,7 @@ class CardTablesController < ApplicationController
       return
     end
 
-    unless table[position].nil?
-      head 403
-      return
-    end
-
-    table[position] = name
-
-    if table.a && table.b && table.c && table.d
-      table.board_game = BoardGame.create(a: table.a, b: table.b, c: table.c, d: table.d)
-    end
-
-    table.save
+    return head 403 unless table.sit(name, position)
   end
 
   def show_team

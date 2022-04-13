@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2022_04_13_095723) do
+ActiveRecord::Schema[7.0].define(version: 2022_04_13_151911) do
   create_table "board_game_records", force: :cascade do |t|
     t.integer "board_game_id", null: false
     t.string "player"
@@ -62,6 +62,11 @@ ActiveRecord::Schema[7.0].define(version: 2022_04_13_095723) do
     t.string "d"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "a_score"
+    t.integer "b_score"
+    t.integer "c_score"
+    t.integer "d_score"
+    t.integer "prepared"
     t.index ["board_game_id"], name: "index_card_tables_on_board_game_id"
   end
 
