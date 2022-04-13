@@ -197,6 +197,142 @@ class BoardGame < ApplicationRecord
     return finished
   end
 
+  def is_shown?
+    return self.show & 0b1111 != 0
+  end
+
+  def is_team_a_shown?
+    return false unless is_shown?
+    ta = JSON.parse(self.team_a)
+    showPlayer = ['a', 'b', 'c', 'd'][Math.log(self.show, 2)]
+    return ta.include? showPlayer
+  end
+
+  def unfinished_players
+    return ['a', 'b', 'c', 'd'] - finish_order
+  end
+
+  def settle
+    order = finish_order
+    steps = [0, 2, 5, 10, 20, 40, 80, 160]
+
+    ta = JSON.parse(self.team_a)
+    tb = JSON.parse(self.team_b)
+    if ta.size == 1 # 1 v 3
+      tap = ta[0]
+      if order.size == 1 # 红了
+        if is_shown? # 亮/踢
+          if is_team_a_shown? # 亮
+            self[tap + '_result'] = steps[4] * 3
+            tb.each {|tbi| self[tbi + '_result'] = -steps[4] }
+          else # 踢
+            self[tap + '_result'] = steps[5] * 3
+            tb.each {|tbi| self[tbi + '_result'] = -steps[5] }
+          end
+        else
+          self[tap + '_result'] = steps[3] * 3
+          tb.each {|tbi| self[tbi + '_result'] = -steps[3] }
+        end
+      elsif order.size == 2 # 抓两个
+        if is_shown?
+          if is_team_a_shown?
+            self[tap + '_result'] = steps[3] * 2
+            tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[3] : 0)}
+          else
+            self[tap + '_result'] = steps[4] * 2
+            tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[4] : 0)}
+          end
+        else
+          self[tap + '_result'] = steps[2] * 2
+          tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[2] : 0)}
+        end
+      elsif order.size == 3 && order.include?(tap) # 抓一个
+        if is_shown?
+          if is_team_a_shown?
+            self[tap + '_result'] = steps[2]
+            tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[2] : 0)}
+          else
+            self[tap + '_result'] = steps[3]
+            tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[3] : 0)}
+          end
+        else
+          self[tap + '_result'] = steps[1]
+          tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[3] : 0)}
+        end
+      elsif !order.include? tap # 黑了
+        if is_shown?
+          if is_team_a_shown? # 踢
+            self[tap + '_result'] = -steps[5] * 3
+            tb.each {|tbi| self[tbi + '_result'] = steps[4] }
+          else
+            self[tap + '_result'] = -steps[4] * 3
+            tb.each {|tbi| self[tbi + '_result'] = steps[5] }
+          end
+        else
+          self[tap + '_result'] = -steps[3] * 3
+          tb.each {|tbi| self[tbi + '_result'] = steps[3] }
+        end
+      end
+    else # 2 v 2
+      if unfinished_players.size == 2 && (unfinished_players - tb).empty? # a完胜
+        if is_shown?
+          if is_team_a_shown?
+            ta.each {|tbi| self[tbi + '_result'] = steps[3] }
+            tb.each {|tbi| self[tbi + '_result'] = -steps[3] }
+          else
+            ta.each {|tbi| self[tbi + '_result'] = steps[4] }
+            tb.each {|tbi| self[tbi + '_result'] = -steps[4] }
+          end
+        else
+          ta.each {|tbi| self[tbi + '_result'] = steps[2] }
+          tb.each {|tbi| self[tbi + '_result'] = -steps[2] }
+        end
+      elsif unfinished_players.size == 2 && (unfinished_players - ta).empty? #b完胜
+        if is_shown?
+          if is_team_a_shown? # 踢
+            ta.each {|tbi| self[tbi + '_result'] = -steps[4] }
+            tb.each {|tbi| self[tbi + '_result'] = steps[4] }
+          else
+            ta.each {|tbi| self[tbi + '_result'] = -steps[3] }
+            tb.each {|tbi| self[tbi + '_result'] = steps[3] }
+          end
+        else
+          ta.each {|tbi| self[tbi + '_result'] = -steps[2] }
+          tb.each {|tbi| self[tbi + '_result'] = steps[2] }
+        end
+      elsif ta.include?(finish_order[0]) && unfinished_players.size == 1 && tb.include?(unfinished_players[0]) #a抓一个
+        if is_shown?
+          if is_team_a_shown?
+            ta.each {|tbi| self[tbi + '_result'] = steps[2] }
+            tb.each {|tbi| self[tbi + '_result'] = -steps[2] }
+          else
+            ta.each {|tbi| self[tbi + '_result'] = steps[3] }
+            tb.each {|tbi| self[tbi + '_result'] = -steps[3] }
+          end
+        else
+          ta.each {|tbi| self[tbi + '_result'] = steps[1] }
+          tb.each {|tbi| self[tbi + '_result'] = -steps[1] }
+        end
+      elsif tb.include?(finish_order[0]) && unfinished_players.size == 1 && ta.include?(unfinished_players[0]) #b抓一个
+        if is_shown?
+          if is_team_a_shown? # 踢
+            ta.each {|tbi| self[tbi + '_result'] = -steps[3] }
+            tb.each {|tbi| self[tbi + '_result'] = steps[3] }
+          else
+            ta.each {|tbi| self[tbi + '_result'] = -steps[2] }
+            tb.each {|tbi| self[tbi + '_result'] = steps[2] }
+          end
+        else
+          ta.each {|tbi| self[tbi + '_result'] = -steps[1] }
+          tb.each {|tbi| self[tbi + '_result'] = steps[1] }
+        end
+      else #平局
+        ta.each {|tai| self[tai + '_result'] = steps[0] }
+        tb.each {|tbi| self[tbi + '_result'] = steps[0] }
+      end
+    end
+  end
+
   def play(player_name, cards)
     self.with_lock do
       return false if cards.empty?
@@ -222,6 +358,14 @@ class BoardGame < ApplicationRecord
       self.save
 
       self.board_game_records.create!(:player => player, :content => cards, :status => remaining_cards.empty? ? 99 : 2)
+
+      if finished
+        begin
+          self.settle
+        rescue Exception => error
+          puts error.inspect
+        end
+      end
     end
   end
 

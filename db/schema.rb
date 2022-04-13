@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2022_04_11_095900) do
+ActiveRecord::Schema[7.0].define(version: 2022_04_13_095723) do
   create_table "board_game_records", force: :cascade do |t|
     t.integer "board_game_id", null: false
     t.string "player"
@@ -37,16 +37,18 @@ ActiveRecord::Schema[7.0].define(version: 2022_04_11_095900) do
     t.string "current_player"
     t.string "last_player"
     t.string "last_cards"
-    t.integer "team"
     t.string "team_a"
     t.string "team_b"
     t.string "shose_owner"
-    t.string "show_team"
     t.integer "show"
     t.string "show_a"
     t.string "show_b"
     t.string "show_c"
     t.string "show_d"
+    t.integer "a_result"
+    t.integer "b_result"
+    t.integer "c_result"
+    t.integer "d_result"
   end
 
   create_table "card_tables", force: :cascade do |t|
