@@ -101,7 +101,6 @@ class BoardGame < ApplicationRecord
       id: self.id,
       status: self.status,
       player: player,
-      finish_order: finish_order,
       players: {
         a: {
           name: self.a,
@@ -227,8 +226,6 @@ class BoardGame < ApplicationRecord
   end
 
   def finish_order
-    return [] unless self.status == 99
-
     order = []
     for r in self.board_game_records.order(:created_at)
       order.append(r.player) if r.status == 99
