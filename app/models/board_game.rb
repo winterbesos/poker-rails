@@ -104,6 +104,7 @@ class BoardGame < ApplicationRecord
       players: {
         a: {
           name: self.a,
+          score: self.a_result,
           last_play: last_a.nil? ? nil : {
             action: last_a.content.nil? ? 'PASS' : 'PLAY',
             cards: last_a.content.nil? ? nil : JSON.parse(last_a.content),
@@ -118,6 +119,7 @@ class BoardGame < ApplicationRecord
         },
         b: {
           name: self.b,
+          score: self.b_result,
           last_play: last_b.nil? ? nil : {
             action: last_b.content.nil? ? 'PASS' : 'PLAY',
             cards: last_b.content.nil? ? nil : JSON.parse(last_b.content),
@@ -132,6 +134,7 @@ class BoardGame < ApplicationRecord
         },
         c: {
           name: self.c,
+          score: self.c_result,
           last_play: last_c.nil? ? nil : {
             action: last_c.content.nil? ? 'PASS' : 'PLAY',
             cards: last_c.content.nil? ? nil : JSON.parse(last_c.content),
@@ -146,6 +149,7 @@ class BoardGame < ApplicationRecord
         },
         d: {
           name: self.d,
+          score: self.d_result,
           last_play: last_d.nil? ? nil : {
             action: last_d.content.nil? ? 'PASS' : 'PLAY',
             cards: last_d.content.nil? ? nil : JSON.parse(last_d.content),
@@ -257,16 +261,16 @@ class BoardGame < ApplicationRecord
           end
         else
           self[tap + '_result'] = steps[1]
-          tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[3] : 0)}
+          tb.each {|tbi| self[tbi + '_result'] = (unfinished_players.include?(tbi) ? -steps[1] : 0)}
         end
       elsif !order.include? tap # 黑了
         if is_shown?
           if is_team_a_shown? # 踢
             self[tap + '_result'] = -steps[5] * 3
-            tb.each {|tbi| self[tbi + '_result'] = steps[4] }
+            tb.each {|tbi| self[tbi + '_result'] = steps[5] }
           else
             self[tap + '_result'] = -steps[4] * 3
-            tb.each {|tbi| self[tbi + '_result'] = steps[5] }
+            tb.each {|tbi| self[tbi + '_result'] = steps[4] }
           end
         else
           self[tap + '_result'] = -steps[3] * 3
